@@ -925,6 +925,8 @@ project("Spunbric") {
     version = generateImplementationVersionString(apiProject.version as String, minecraftVersion, recommendedVersion)
     println("Spunbric Version $version")
 
+    val fabricMinecraftConfig by configurations.named("minecraft")
+
     val fabricAppLaunchConfig by configurations.register("applaunch") {
     }
 
@@ -970,7 +972,7 @@ project("Spunbric") {
     }
 
     val fabricMixinsImplementation by configurations.named(fabricMixins.implementationConfigurationName) {
-        //extendsFrom(vanillaMinecraftConfig) // TODO
+        extendsFrom(fabricMinecraftConfig)
         //extendsFrom(vanillaMinecraftClasspathConfig)
     }
 
@@ -994,9 +996,52 @@ project("Spunbric") {
                 }
     }
 
+    val LOOM_MIXIN_AP_ARGS = setOf("outRefMapFile", "defaultObfuscationEnv", "outMapFileNamedIntermediary", "inMapFileNamedIntermediary")
+
+    fun applyMixinSourceSets(project: Project, base: SourceSet) {
+        // Launch
+        // can see entire project
+        fabricLaunch.apply {
+            compileClasspath += base.compileClasspath
+            runtimeClasspath += base.runtimeClasspath
+            project.dependencies.add(implementationConfigurationName, base.output)
+        }
+
+        // Mixin
+        // can see entire project
+        fabricMixins.apply {
+            compileClasspath += base.compileClasspath
+            runtimeClasspath += base.runtimeClasspath
+            project.dependencies.add(implementationConfigurationName, base.output)
+        }
+
+        // TODO: Provide a nicer way to do this in Loom
+        val refmapArgName = "-AoutRefMapFile"
+        project.afterEvaluate {
+            // No accessors?
+            // configure refmap
+//            tasks.named<JavaCompile>(accessor.get().compileJavaTaskName).configure { c ->
+//                c.options.compilerArgs.removeIf { arg -> arg.startsWith(refmapArgName) }
+//                c.options.compilerArgs.add("$refmapArgName=${c.destinationDir}/${project.name.toLowerCase()}-${accessor.get().name}-refmap.json")
+//            }
+            // And remove Mixin AP parameters from the main source set
+            tasks.named<JavaCompile>(base.compileJavaTaskName).configure {
+                options.compilerArgs.removeIf { arg -> LOOM_MIXIN_AP_ARGS.any { mixin -> arg.contains(mixin) } }
+            }
+        }
+
+        // Make sure Mixin AP doesn't run on the base source set
+        project.configurations.named(base.annotationProcessorConfigurationName).configure {
+            exclude(mapOf("group" to "net.fabricmc", "module" to "fabric-mixin-compile-extensions"))
+            exclude(mapOf("group" to "net.fabricmc", "module" to "sponge-mixin"))
+        }
+    }
+
+    applyMixinSourceSets(fabricProject, fabricMain)
+
     dependencies {
         // Specify required platform dependencies for Spunbric
-        "minecraft"("com.mojang:minecraft:1.16.5")
+        "minecraft"("com.mojang:minecraft:$minecraftVersion")
 
         val loomExtension = fabricProject.extensions.findByName("loom") as net.fabricmc.loom.LoomGradleExtension
 
@@ -1019,7 +1064,7 @@ project("Spunbric") {
         fabricMixinsImplementation(project(commonProject.path))
         add(fabricLaunch.implementationConfigurationName, project(":SpongeAPI"))
         add(fabricLaunch.implementationConfigurationName, fabricAppLaunchConfig)
-        //add(fabricLaunch.implementationConfigurationName, vanillaMinecraftConfig)
+        add(fabricLaunch.implementationConfigurationName, fabricMinecraftConfig)
         //add(fabricLaunch.implementationConfigurationName, vanillaMinecraftClasspathConfig)
 
         fabricAppLaunchConfig(project(":SpongeAPI"))
@@ -1052,7 +1097,7 @@ project("Spunbric") {
 
         fabricAppLaunchImplementation(fabricAppLaunchConfig)
         fabricMixinsImplementation(fabricAppLaunchConfig)
-        //fabricMixinsImplementation(vanillaMinecraftConfig)
+        fabricMixinsImplementation(fabricMinecraftConfig)
         //fabricMixinsImplementation(vanillaMinecraftClasspathConfig)
 
         testplugins?.apply {
