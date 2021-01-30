@@ -9,6 +9,7 @@ plugins {
     id("org.cadixdev.licenser") version "0.5.0"
     id("com.github.johnrengelman.shadow") version "5.2.0"
     // id("org.spongepowered.mixin")
+    id("fabric-loom") version "0.5-SNAPSHOT" apply false // FIXME: Horrid hack
 }
 
 val apiProject = project.project("SpongeAPI")
@@ -897,6 +898,157 @@ project("SpongeVanilla") {
                         this.url.set(projectUrl)
                     }
                 }
+            }
+        }
+    }
+}
+
+project("Spunbric") {
+    val fabricProject = this
+
+    apply {
+        // TODO: Add new plugin for net.fabricmc.gradle.loom
+        plugin("fabric-loom")
+        plugin("java-library")
+        plugin("maven-publish")
+        plugin("org.cadixdev.licenser")
+        plugin("com.github.johnrengelman.shadow")
+    }
+
+    repositories {
+        maven(url = "https://maven.fabricmc.net/") {
+            name = "Fabric"
+        }
+    }
+
+    description = "The unofficial SpongeAPI implementation for the Fabric Mod Loader"
+    version = generateImplementationVersionString(apiProject.version as String, minecraftVersion, recommendedVersion)
+    println("Spunbric Version $version")
+
+    val fabricAppLaunchConfig by configurations.register("applaunch") {
+    }
+
+    val fabricMain by sourceSets.named("main") {
+        // implementation (compile) dependencies
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = accessors.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = launch.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = applaunch.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+    }
+
+    val fabricLaunch by sourceSets.register("launch") {
+        // implementation (compile) dependencies
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = launch.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = applaunch.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = main, targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = fabricProject, sourceAdding = this, targetSource = fabricMain, implProject = fabricProject, dependencyConfigName = fabricMain.implementationConfigurationName)
+    }
+
+    val fabricMixins by sourceSets.register("mixins") {
+        // implementation (compile) dependencies
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = mixins.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = accessors.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = launch.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = applaunch.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = main, targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = fabricProject, sourceAdding = fabricMain, targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = fabricProject, sourceAdding = fabricLaunch, targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+    }
+
+    val fabricAppLaunch by sourceSets.register("applaunch") {
+        // implementation (compile) dependencies
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = applaunch.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = launch.get(), targetSource = fabricLaunch, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName)
+        //applyNamedDependencyOnOutput(originProject = fabricProject, sourceAdding = vanillaInstaller, targetSource = this, implProject = fabricProject, dependencyConfigName = this.implementationConfigurationName) // TODO: Installer?
+        applyNamedDependencyOnOutput(originProject = fabricProject, sourceAdding = this, targetSource = fabricLaunch, implProject = fabricProject, dependencyConfigName = fabricLaunch.implementationConfigurationName)
+        // runtime dependencies - literally add the rest of the project, because we want to launch the game
+        applyNamedDependencyOnOutput(originProject = fabricProject, sourceAdding = fabricMixins, targetSource = this, implProject = fabricProject, dependencyConfigName = this.runtimeClasspathConfigurationName)
+        applyNamedDependencyOnOutput(originProject = fabricProject, sourceAdding = fabricLaunch, targetSource = this, implProject = fabricProject, dependencyConfigName = this.runtimeClasspathConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = mixins.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.runtimeClasspathConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = main, targetSource = this, implProject = fabricProject, dependencyConfigName = this.runtimeClasspathConfigurationName)
+        applyNamedDependencyOnOutput(originProject = commonProject, sourceAdding = accessors.get(), targetSource = this, implProject = fabricProject, dependencyConfigName = this.runtimeClasspathConfigurationName)
+        applyNamedDependencyOnOutput(originProject = fabricProject, sourceAdding = fabricMain, targetSource = this, implProject = fabricProject, dependencyConfigName = this.runtimeClasspathConfigurationName)
+    }
+
+    val fabricMixinsImplementation by configurations.named(fabricMixins.implementationConfigurationName) {
+        //extendsFrom(vanillaMinecraftConfig) // TODO
+        //extendsFrom(vanillaMinecraftClasspathConfig)
+    }
+
+    val fabricMixinsAnnotationProcessor by configurations.named(fabricMixins.annotationProcessorConfigurationName)
+
+    val fabricAppLaunchImplementation by configurations.named(fabricAppLaunch.implementationConfigurationName) {
+        extendsFrom(launchConfig)
+    }
+
+    val fabricAppLaunchRuntime by configurations.named(fabricAppLaunch.runtimeOnlyConfigurationName)
+
+    println("Ext")
+    println(extensions.findByName("loom"))
+
+    dependencies {
+        // Specify required platform dependencies for Spunbric
+        "minecraft"("com.mojang:minecraft:1.16.5")
+
+        val loomExtension = fabricProject.extensions.findByName("loom") as net.fabricmc.loom.LoomGradleExtension
+
+        "mappings"(loomExtension.officialMojangMappings())
+        // Fabric loader
+        "modImplementation"("net.fabricmc:fabric-loader:0.11.1")
+        // Fabric API
+        // Sponge requires Fabric API as we reimplement where needed to preserve compatibility with most mods
+        "modImplementation"("net.fabricmc.fabric-api:fabric-api:0.30.0+1.16")
+
+        api(launch.map { it.output })
+        implementation(accessors.map { it.output })
+        implementation(project(commonProject.path)) {
+            exclude(group = "net.minecraft")
+            // TODO: Exclude sponge's mixin?
+        }
+        // TODO: AP needed?
+        // annotationProcessor("org.spongepowered:mixin:$mixinVersion:processor")
+
+        fabricMixinsImplementation(project(commonProject.path))
+        add(fabricLaunch.implementationConfigurationName, project(":SpongeAPI"))
+        add(fabricLaunch.implementationConfigurationName, fabricAppLaunchConfig)
+        //add(fabricLaunch.implementationConfigurationName, vanillaMinecraftConfig)
+        //add(fabricLaunch.implementationConfigurationName, vanillaMinecraftClasspathConfig)
+
+        fabricAppLaunchConfig(project(":SpongeAPI"))
+        fabricAppLaunchConfig(platform("net.kyori:adventure-bom:4.4.0")) // TODO: Verify platform plugins work fine with loom
+        fabricAppLaunchConfig("net.kyori:adventure-serializer-configurate4")
+        fabricAppLaunchConfig("org.spongepowered:mixin:$mixinVersion")
+        fabricAppLaunchConfig("org.ow2.asm:asm-util:$asmVersion")
+        fabricAppLaunchConfig("org.ow2.asm:asm-tree:$asmVersion")
+        fabricAppLaunchConfig("com.google.guava:guava:$guavaVersion")
+        fabricAppLaunchConfig("org.spongepowered:plugin-spi:$pluginSpiVersion")
+        fabricAppLaunchConfig("javax.inject:javax.inject:1")
+        fabricAppLaunchConfig("org.apache.logging.log4j:log4j-api:2.11.2")
+        fabricAppLaunchConfig("org.apache.logging.log4j:log4j-core:2.11.2")
+        fabricAppLaunchConfig("com.zaxxer:HikariCP:2.6.3")
+        fabricAppLaunchConfig("org.apache.logging.log4j:log4j-slf4j-impl:2.11.2")
+        fabricAppLaunchConfig(platform("org.spongepowered:configurate-bom:4.0.0"))
+        fabricAppLaunchConfig("org.spongepowered:configurate-core") {
+            exclude(group = "org.checkerframework", module = "checker-qual")
+        }
+        fabricAppLaunchConfig("org.spongepowered:configurate-hocon") {
+            exclude(group = "org.spongepowered", module = "configurate-core")
+            exclude(group = "org.checkerframework", module = "checker-qual")
+        }
+        fabricAppLaunchConfig("org.spongepowered:configurate-jackson") {
+            exclude(group = "org.spongepowered", module = "configurate-core")
+            exclude(group = "org.checkerframework", module = "checker-qual")
+        }
+
+        // Fabric's Launch dependencies are just loader
+
+        fabricAppLaunchImplementation(fabricAppLaunchConfig)
+        fabricMixinsImplementation(fabricAppLaunchConfig)
+        //fabricMixinsImplementation(vanillaMinecraftConfig)
+        //fabricMixinsImplementation(vanillaMinecraftClasspathConfig)
+
+        testplugins?.apply {
+            fabricAppLaunchRuntime(project(testplugins.path)) {
+                exclude(group = "org.spongepowered")
             }
         }
     }

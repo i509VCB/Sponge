@@ -34,3 +34,14 @@ if (spongeForgeEnabledInCi.toBoolean()) {
     include(":SpongeForge")
     project(":SpongeForge").projectDir = file("forge")
 }
+
+val spunbric = file("spunbric.settings.gradle.kts")
+
+if (spunbric.exists()) {
+    apply(from = spunbric)
+} else {
+    spunbric.writeText("// Uncomment to enable Spunbric module.\n" +
+            "// By default only Sponge and SpongeVanilla are made available\n" +
+            "//include(\":Spunbric\")\n" +
+            "//project(\":Spunbric\").projectDir = file(\"fabric\")\n")
+}
