@@ -982,8 +982,17 @@ project("Spunbric") {
 
     val fabricAppLaunchRuntime by configurations.named(fabricAppLaunch.runtimeOnlyConfigurationName)
 
-    println("Ext")
     println(extensions.findByName("loom"))
+
+    configure<net.fabricmc.loom.LoomGradleExtension> {
+        // TODO: Refactor loom to support multiple aw files
+        commonProject.sourceSets["main"].resources
+                .filter { it.name.endsWith(".accesswidener") }
+                .files
+                .forEach {
+                    accessWidener(it)
+                }
+    }
 
     dependencies {
         // Specify required platform dependencies for Spunbric
